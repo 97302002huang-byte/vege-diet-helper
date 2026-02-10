@@ -8,78 +8,47 @@ st.set_page_config(
     page_title="植感飲食",
     page_icon="🥗",
     layout="wide",
-    initial_sidebar_state="collapsed" # 預設收起側邊欄，因為我們有頂部導航
+    initial_sidebar_state="collapsed"
 )
 
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* 隱藏預設漢堡選單與側邊欄 (如果完全不想用的話) */
-    /* [data-testid="stSidebar"] { display: none; } */
-    
-    /* 1. 頂部導航按鈕優化 */
-    /* 鎖定最上方的 radio 元件進行樣式調整 */
-    div[role="radiogroup"] {
-        display: flex;
-        justify-content: center; /* 水平置中 */
-        width: 100%;
-        background-color: #f8f9fa; /* 淺灰背景區隔 */
-        padding: 10px;
-        border-radius: 15px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    
-    /* 導航按鈕本體 */
-    div[role="radiogroup"] label {
-        flex: 1; /* 平均分配寬度 */
-        text-align: center;
-        margin: 0 5px !important;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px !important;
-        background-color: white;
-        transition: all 0.3s;
-    }
-    
-    /* 選中狀態 - 深色凸顯 */
-    div[role="radiogroup"] label[data-selected="true"] {
-        background-color: #2c3e50 !important;
-        color: white !important;
-        border-color: #2c3e50 !important;
-        font-weight: bold;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-
-    /* 隱藏 Radio 的圓圈圈 */
-    div[role="radiogroup"] label div:first-child {
-        display: none;
-    }
-
-    /* 2. 一般按鈕樣式 (區隔導航) */
-    .stButton > button {
-        border-radius: 8px;
-        font-weight: 500;
-        border: 1px solid #ddd;
-    }
-    
-    /* 3. 今日菜單移除按鈕 (垃圾桶) 優化 */
-    /* 讓按鈕不要換行，並縮小內距 */
-    div[data-testid="column"] button {
-        padding: 0.25rem 0.5rem;
-        min-height: 0px;
-        height: auto;
-    }
-
     /* 極簡標題樣式 */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         font-weight: 400;
         color: #2c3e50;
-        text-align: center; /* 標題也置中比較好看 */
+        text-align: center;
     }
     
     /* 隱藏 Plotly 模式列 */
     .js-plotly-plot .plotly .modebar {
         display: none !important;
+    }
+
+    /* --- 手機版強制並排修正 (針對今日菜單移除按鈕) --- */
+    /* 當螢幕小於 640px 時，強制特定欄位不堆疊 */
+    @media (max-width: 640px) {
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important; /* 強制水平排列 */
+            align-items: center !important; /* 垂直置中 */
+        }
+        /* 調整欄位間距 */
+        div[data-testid="column"] {
+            width: auto !important;
+            flex: 1 !important;
+            min-width: 0 !important;
+        }
+        /* 針對按鈕欄位縮小寬度 */
+        div[data-testid="column"]:nth-child(2) {
+            flex: 0 0 50px !important; /* 固定按鈕欄位寬度 */
+        }
+    }
+    
+    /* 調整按鈕樣式 */
+    .stButton > button {
+        border-radius: 8px;
+        border: 1px solid #eee;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -87,13 +56,13 @@ def inject_custom_css():
 # --- 2. 頁面功能函數 ---
 
 def show_ingredients_page():
-    # 搜尋欄位
-    search_keyword = st.text_input("🔍 搜尋食材", placeholder="輸入名稱或功效...", key="search_keyword")
-    
-    # 簡易篩選器 (使用 Pills 避免手機跳鍵盤)
-    # 這裡簡化為只顯示最重要的分類篩選，節省手機空間
+    # 簡易篩選器
     categories = ["全部"] + db.get_categories()
-    selected_cat = st.pills("分類篩選", categories, default="全部", selection_mode="single")
+    selected_cat = st.pills("分類篩選", categories, default="全部", selection_mode="single", label_visibility="collapsed")
+    
+    # 搜尋欄位
+    search_keyword = st.text_input("搜尋", placeholder="輸入名稱或功效...", key="search_keyword", label_visibility="collapsed")
+    st.write("") # Spacer
     
     # 資料處理
     all_ingredients = db.get_all_ingredients()
@@ -130,13 +99,13 @@ def show_ingredients_page():
     
     df = pd.DataFrame(df_data)
     
-    # 手機版優化表格：固定第一欄，隱藏不重要的欄位
+    # 手機版優化表格
     st.dataframe(
         df,
         use_container_width=True,
         hide_index=True,
         column_config={
-            "食材名稱": st.column_config.TextColumn("食材", width="small", pinned=True), # 固定
+            "食材名稱": st.column_config.TextColumn("食材", width="small", pinned=True),
             "食性": st.column_config.TextColumn("食性", width="small"),
             "五色": st.column_config.TextColumn("五色", width="small"),
             "功效": st.column_config.TextColumn("功效", width="large"),
@@ -144,9 +113,8 @@ def show_ingredients_page():
     )
 
 def show_recipes_page():
-    # 新增食譜區塊 (預設收起，保持版面乾淨)
+    # 新增食譜區塊
     with st.expander("➕ 建立新食譜", expanded=False):
-        # 手機上單欄顯示比較好操作
         st.text_input("食譜名稱", key="new_recipe_name")
         st.selectbox("分類", db.get_recipe_categories(), key="new_recipe_category")
         st.text_area("描述", key="new_recipe_description", height=80)
@@ -154,26 +122,25 @@ def show_recipes_page():
         st.write("---")
         st.write("**選擇食材**")
         
-        # 使用 Tabs 分類食材
         all_ingredients = db.get_all_ingredients()
         tabs = st.tabs(["🥬 蔬果", "🍄 蛋豆菇", "🌾 主食", "🧂 其他"])
         
         def get_options(cats):
             return [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients if ing['category'] in cats]
 
-        with tabs[0]: # 蔬果
+        with tabs[0]:
             opts1 = get_options(['葉菜類', '根莖類', '花果類', '水果類'])
             st.multiselect("選擇蔬果", opts1, key="tab_veg")
         
-        with tabs[1]: # 蛋豆菇
+        with tabs[1]:
             opts2 = get_options(['豆製品', '蛋奶類', '菇菌類'])
             st.multiselect("選擇蛋白質", opts2, key="tab_prot")
             
-        with tabs[2]: # 主食
+        with tabs[2]:
             opts3 = get_options(['五穀雜糧', '堅果種子類'])
             st.multiselect("選擇主食", opts3, key="tab_grain")
             
-        with tabs[3]: # 其他
+        with tabs[3]:
             covered = ['葉菜類', '根莖類', '花果類', '水果類', '豆製品', '蛋奶類', '菇菌類', '五穀雜糧', '堅果種子類']
             opts4 = [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients if ing['category'] not in covered]
             st.multiselect("選擇調味/其他", opts4, key="tab_other")
@@ -212,12 +179,10 @@ def show_recipes_page():
     
     st.divider()
     
-    # 顯示食譜列表 (移除刪除按鈕)
+    # 顯示食譜列表 (已移除刪除功能)
     recipes = db.get_all_recipes()
     if recipes:
-        # 分類顯示
         cats = db.get_recipe_categories()
-        # 手機上 Tabs 太多會很難點，改用 Selectbox 篩選
         view_cat = st.selectbox("瀏覽分類", ["全部"] + cats)
         
         display_recipes = recipes if view_cat == "全部" else [r for r in recipes if r['category'] == view_cat]
@@ -231,7 +196,6 @@ def show_recipes_page():
                     if details['description']: st.caption(details['description'])
                     ings = [f"{ing['name']}" for ing in details.get('ingredients', [])]
                     st.write("、".join(ings))
-                    # 這裡移除了刪除按鈕
         else:
             st.info("此分類暫無食譜")
     else:
@@ -240,9 +204,9 @@ def show_recipes_page():
 def show_menu_workspace_page():
     if 'menu_workspace' not in st.session_state: st.session_state.menu_workspace = []
     
-    # 上方模式選擇 (移除 icon)
+    # 上方模式選擇 (修正圖示)
     modes = ["自由配", "快速樣板", "經典套餐"]
-    mode = st.pills(None, options=modes, default=modes[0], selection_mode="single")
+    mode = st.segmented_control(None, options=modes, default=modes[0], selection_mode="single", key="menu_mode_selector")
     
     if mode == "自由配":
         show_free_style_panel()
@@ -261,8 +225,7 @@ def show_menu_workspace_page():
     show_shopping_list_generator()
 
 def show_free_style_panel():
-    # 手機版改為上下排列，不要左右分欄，比較好操作
-    st.caption("方式 A：從食譜挑選") # 改名
+    st.caption("方式 A：從食譜挑選") # 修正文字
     
     r_cats = db.get_recipe_categories()
     if r_cats:
@@ -280,20 +243,18 @@ def show_free_style_panel():
                 opts = {f"{r['name']}": r['id'] for r in filtered_recipes}
                 sel_recipe = st.selectbox("選擇食譜", list(opts.keys()), key="fs_recipe_sel", label_visibility="collapsed")
                 
-                # 使用 full container width 按鈕
-                if st.button("＋ 加入食譜", key="add_free", use_container_width=True):
+                if st.button("＋ 加入", key="add_free", use_container_width=True):
                     r = db.get_recipe_by_id(opts[sel_recipe])
                     st.session_state.menu_workspace.append({'type':'recipe', **r})
                     st.toast(f"已加入：{r['name']}")
             else:
                 st.info("無食譜")
     
-    st.write("") # Spacer
+    st.write("")
     st.caption("方式 B：自訂菜色 (DIY)")
     
     c_name = st.text_input("菜名", placeholder="例如: 燙青菜", key="fs_diy_name")
     
-    # DIY 選食材 (Sticky)
     all_ingredients = db.get_all_ingredients()
     formatted_opts = [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients]
     
@@ -323,7 +284,7 @@ def show_free_style_panel():
         elif not c_name:
             st.toast("請輸入菜名", icon="⚠️")
 
-    st.button("＋ 加入自訂", key="add_cust_free", use_container_width=True, on_click=add_diy_callback)
+    st.button("＋ 加入", key="add_cust_free", use_container_width=True, on_click=add_diy_callback)
 
 def show_quick_template_panel():
     scenarios = ['1人獨享', '2人世界', '3-4人小家庭', '5-6人聚餐', '10人家族聚會', '20人中型派對']
@@ -341,13 +302,13 @@ def show_quick_template_panel():
     bp = blueprints.get(sel_scn, {})
     if 'temp_sels' not in st.session_state: st.session_state.temp_sels = {}
     
-    # 手機版不分欄，直接垂直排列
     for cat, count in bp.items():
         for i in range(count):
             key = f"{cat}_{i}"
             if key in st.session_state.temp_sels:
                 item = st.session_state.temp_sels[key]
-                c1, c2 = st.columns([4, 1])
+                # 手機版強制不堆疊的關鍵在 CSS，這裡正常寫
+                c1, c2 = st.columns([5, 1], vertical_alignment="center")
                 with c1: st.success(f"{cat}: {item['name']}")
                 with c2: 
                     if st.button("✕", key=f"rm_{key}"):
@@ -382,7 +343,6 @@ def show_slot_dialog(key, cat):
             st.info("無此類食譜")
     with t2:
         c_name = st.text_input("菜名", key=f"cn_{key}")
-        # DIY 邏輯簡化
         all_ings = [i['name'] for i in db.get_all_ingredients()]
         c_ings = st.multiselect("食材", options=all_ings, key=f"ci_{key}")
         
@@ -425,7 +385,6 @@ def show_workspace_dashboard():
         cat = item.get('category', '自訂')
         counts[cat] = counts.get(cat, 0) + 1
     
-    # 標籤樣式優化
     badges = [f"{k}: {v}" for k,v in counts.items()]
     st.info(" | ".join(badges), icon="🍽️")
 
@@ -434,16 +393,15 @@ def show_workspace_content():
     
     for i, item in enumerate(st.session_state.menu_workspace):
         with st.container():
-            # 調整比例：給文字更多空間 (5:1)，垂直置中
+            # 這裡套用了 CSS 強制手機版並排
             c1, c2 = st.columns([5, 1], vertical_alignment="center")
             with c1:
                 st.write(f"**{item['name']}**")
             with c2:
-                # 垃圾桶按鈕
                 if st.button("🗑️", key=f"rm_ws_{i}"):
                     st.session_state.menu_workspace.pop(i)
                     st.rerun()
-            st.divider() # 每個項目之間加分隔線
+            st.divider()
     
     if st.button("清空工作台", key="clr_ws", use_container_width=True):
         st.session_state.menu_workspace = []
@@ -452,7 +410,7 @@ def show_workspace_content():
 def show_workspace_analysis():
     if not st.session_state.menu_workspace: return
     
-    st.write("---") # 分隔線
+    st.write("---")
     c1, c2 = st.columns(2)
     
     with c1:
@@ -498,20 +456,19 @@ def show_workspace_analysis():
             scores = {'熱':2, '溫':1, '平':0, '涼':-1, '寒':-2}
             score = sum(scores.get(n,0) for n in natures) / len(natures)
             
-            # 移除文字結論，只保留滑桿
             pct = (max(-1, min(1, score/1.5)) + 1) / 2 * 100
             
+            # 移除文字結論，只保留滑桿，並增加下方間距
             st.markdown(f"""
             <div style="margin-top:20px; font-size:0.8em; color:#666; display:flex; justify-content:space-between;">
                 <span>❄️寒</span><span>平</span><span>熱🔥</span>
             </div>
-            <div style="height:8px; background:linear-gradient(90deg, #81D4FA, #A5D6A7, #EF9A9A); border-radius:4px; position:relative; margin-bottom: 20px;">
+            <div style="height:8px; background:linear-gradient(90deg, #81D4FA, #A5D6A7, #EF9A9A); border-radius:4px; position:relative; margin-bottom: 30px;">
                 <div style="position:absolute; left:{pct}%; top:-4px; width:4px; height:16px; background:#333; transform:translateX(-50%); border-radius:2px;"></div>
             </div>
             """, unsafe_allow_html=True)
             
-            # 加一個空白區塊，避免跟下面的按鈕重疊
-            st.write("") 
+            st.write("") # Spacer
 
 def show_shopping_list_generator():
     if not st.session_state.menu_workspace: return
@@ -550,7 +507,7 @@ def show_shopping_list_generator():
         with c2:
             st.write("**調味品檢查**")
             if 'miss_conds' not in st.session_state: st.session_state.miss_conds = []
-            # 使用 Pills 代替 Multiselect，避免手機跳鍵盤 (如果項目太多才用 select)
+            
             if len(condiments) < 10:
                 sel = st.pills("勾選缺少項目", condiments, selection_mode="multi", key="ms_conds")
             else:
@@ -567,10 +524,13 @@ def main():
     
     st.title("植感飲食")
     
-    # 1. 頂部導航按鈕 (置中 + 樣式優化)
+    # 1. 頂部導航 (改用原生的 segmented_control，穩定且原生置中)
     pages = ["食材", "食譜", "菜單"]
-    pg = st.radio("導覽", pages, horizontal=True, label_visibility="collapsed")
+    pg = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
     
+    # 預設頁面
+    if not pg: pg = "食材"
+
     if pg == "食材": show_ingredients_page()
     elif pg == "食譜": show_recipes_page()
     elif pg == "菜單": show_menu_workspace_page()
