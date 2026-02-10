@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from db_manager import db
+# 引入專業 UI 套件
+import streamlit_antd_components as sac
 
 # --- 1. 全域設定與 CSS ---
 st.set_page_config(
@@ -14,12 +16,12 @@ st.set_page_config(
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* 隱藏預設元件 */
+    /* 隱藏預設元件 (讓畫面更像 App) */
     header {visibility: hidden;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* 1. 標題樣式 */
+    /* 1. 標題樣式 (置中 + 隱藏錨點) */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         text-align: center;
         width: 100%;
@@ -30,67 +32,19 @@ def inject_custom_css():
     }
     .stMarkdown h1 a { display: none !important; }
     
-    /* 2. 導航頁籤 (Segmented Control) 深度客製化 */
-    
-    /* 外層容器：淺灰背景 */
-    div[data-testid="stSegmentedControl"] {
-        background-color: #f0f2f6 !important; /* 淺灰底 */
-        padding: 5px !important;
-        border-radius: 12px !important;
-        border: none !important;
-        width: 100% !important;
-        margin-bottom: 25px; /* 增加下方距離 */
+    /* 2. SAC 元件微調 (SAC 本身已經很美，只需微調邊距) */
+    /* 讓導航列下方留點呼吸空間 */
+    .st-emotion-cache-1y4p8pa {
+        margin-bottom: 15px;
     }
-    
-    /* 內層選項佈局 */
-    div[data-testid="stSegmentedControl"] > div {
-        width: 100% !important;
-        display: flex !important;
-        gap: 5px !important;
-    }
-    
-    /* 每一個選項按鈕 */
-    div[data-testid="stSegmentedControl"] button {
-        flex: 1 !important; /* 強制平分寬度 */
-        border: none !important;
-        border-radius: 8px !important;
-        height: 45px !important; /* 增加高度，讓按鈕看起來更大氣 */
-        margin: 0 !important;
-    }
-    
-    /* ★★★ 核心修正：字體樣式 ★★★ */
-    /* 直接鎖定 p 標籤，忽略層級 */
-    div[data-testid="stSegmentedControl"] p {
-        font-size: 18px !important; /* 確實加大 */
-        font-weight: 700 !important; /* 確實加粗 (Bold) */
-        line-height: 1.5 !important;
-    }
-    
-    /* 未選中狀態：深灰色字 */
-    div[data-testid="stSegmentedControl"] button[aria-selected="false"] {
-        background-color: transparent !important;
-        color: #808495 !important; 
-    }
-    
-    /* ★★★ 核心修正：選中狀態 (去紅化) ★★★ */
-    /* 改用「白底黑字 + 陰影」，區隔於下方的紅色操作按鈕 */
-    div[data-testid="stSegmentedControl"] button[aria-selected="true"] {
-        background-color: #ffffff !important; /* 純白背景 */
-        color: #2c3e50 !important; /* 深藍黑色字 */
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important; /* 浮起陰影 */
-    }
-    /* 強制覆蓋 Streamlit 預設的紅色文字 */
-    div[data-testid="stSegmentedControl"] button[aria-selected="true"] p {
-        color: #2c3e50 !important;
-    }
-    
-    /* 3. 今日菜單移除按鈕 (緊湊) */
+
+    /* 3. 今日菜單按鈕優化 */
     div[data-testid="column"] button {
         padding: 0.2rem 0.5rem !important;
         border: 1px solid #eee !important;
     }
 
-    /* 4. 一般操作按鈕 (維持預設，這樣就有紅色/白色的區別) */
+    /* 4. 一般操作按鈕 */
     .stButton > button {
         border-radius: 8px;
         font-weight: 500;
@@ -106,7 +60,7 @@ def inject_custom_css():
 # --- 2. 頁面功能函數 ---
 
 def show_ingredients_page():
-    # 篩選器
+    # 篩選器 (使用 Pills)
     categories = ["全部"] + db.get_categories()
     selected_cat = st.pills("分類篩選", categories, default="全部", selection_mode="single", label_visibility="collapsed")
     
@@ -243,18 +197,19 @@ def show_recipes_page():
 def show_menu_workspace_page():
     if 'menu_workspace' not in st.session_state: st.session_state.menu_workspace = []
     
-    # 使用純文字，不加 Emoji，但保留全形空白來維持寬度
-    modes = ["　　自由配　　", "　　快速樣板　　", "　　經典套餐　　"]
-    mode_map = {
-        "　　自由配　　": "自由配",
-        "　　快速樣板　　": "快速樣板",
-        "　　經典套餐　　": "經典套餐"
-    }
-    
-    selected_mode_label = st.segmented_control(None, options=modes, default=modes[0], selection_mode="single", key="menu_mode_selector")
-    
-    if not selected_mode_label: selected_mode_label = modes[0]
-    mode = mode_map[selected_mode_label]
+    # 使用 SAC 分段控制器 (二級導航)
+    mode = sac.segmented(
+        items=[
+            sac.SegmentedItem(label='自由配', icon='bag-plus'),
+            sac.SegmentedItem(label='快速樣板', icon='grid-3x3-gap'),
+            sac.SegmentedItem(label='經典套餐', icon='star'),
+        ],
+        align='center',
+        size='md', # 次級選單用中等尺寸
+        radius='lg',
+        use_container_width=True,
+        key='menu_sub_nav'
+    )
     
     if mode == "自由配":
         show_free_style_panel()
@@ -437,7 +392,6 @@ def show_workspace_dashboard():
 def show_workspace_content():
     if not st.session_state.menu_workspace: return
     
-    # Data Editor 表格模式
     df_data = []
     for item in st.session_state.menu_workspace:
         df_data.append({
@@ -584,18 +538,20 @@ def main():
     
     st.markdown("<h1>植感飲食</h1>", unsafe_allow_html=True)
     
-    # 純文字 + 全形空白
-    pages = ["　食材　", "　食譜　", "　菜單　"]
-    page_map = {
-        "　食材　": "食材",
-        "　食譜　": "食譜",
-        "　菜單　": "菜單"
-    }
-    
-    selected_page_label = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
-    
-    if not selected_page_label: selected_page_label = pages[0]
-    pg = page_map[selected_page_label]
+    # ★★★ 使用 SAC 專業級分段導航 ★★★
+    # 這裡的設定確保了：滿版、大尺寸、圓角、專業圖示
+    pg = sac.segmented(
+        items=[
+            sac.SegmentedItem(label='食材', icon='egg-fried'),
+            sac.SegmentedItem(label='食譜', icon='book'),
+            sac.SegmentedItem(label='菜單', icon='cup-straw'),
+        ],
+        align='center',
+        size='lg', # 大尺寸
+        radius='lg', # 圓角
+        use_container_width=True, # 強制滿版
+        key='main_nav' # 唯一識別碼
+    )
 
     if pg == "食材": show_ingredients_page()
     elif pg == "食譜": show_recipes_page()
