@@ -14,49 +14,50 @@ st.set_page_config(
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* 1. 極簡標題樣式 */
-    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-        font-weight: 400;
-        color: #2c3e50;
-        text-align: center;
+    /* --- 隱藏 Streamlit 原生介面 (讓 App 更像原生應用) --- */
+    .stAppHeader {
+        display: none; /* 隱藏頂部 Fork/GitHub/Menu */
+    }
+    footer {
+        display: none; /* 隱藏底部 Made with Streamlit 與皇冠 */
     }
     
-    /* 2. 導航頁籤 (Segmented Control) 滿版均分優化 */
-    /* 強制讓 Segmented Control 的外層容器填滿 */
+    /* --- 1. 標題樣式 --- */
+    .stMarkdown h1 {
+        text-align: center;
+        color: #2c3e50;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        font-weight: 400;
+    }
+    
+    /* --- 2. 導航頁籤 (Segmented Control) 強制滿版 --- */
     div[data-testid="stSegmentedControl"] {
-        width: 100% !important;
+        width: 100% !important; /* 容器全寬 */
     }
     div[data-testid="stSegmentedControl"] > div {
-        width: 100% !important;
+        width: 100% !important; /* 內層全寬 */
         display: flex !important;
     }
-    /* 關鍵：讓每個選項按鈕平分寬度 (Flex Grow) */
+    /* 關鍵：讓每個按鈕平分寬度 */
     div[data-testid="stSegmentedControl"] button {
-        flex: 1 !important;
-        min-width: 0px !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        justify-content: center !important;
+        flex-grow: 1 !important;
+        flex-basis: 0 !important;
+        min-width: 0 !important; /* 允許文字壓縮 */
+        padding-left: 2px !important;
+        padding-right: 2px !important;
     }
     
-    /* 3. 今日菜單 Data Editor 優化 */
-    /* 隱藏 Data Editor 的索引列 (如果有的話) */
-    div[data-testid="stDataFrame"] table thead th:first-child {
-        display: none;
-    }
-    div[data-testid="stDataFrame"] table tbody td:first-child {
-        display: none;
-    }
-
-    /* 隱藏 Plotly 模式列 */
-    .js-plotly-plot .plotly .modebar {
-        display: none !important;
-    }
-    
-    /* 一般按鈕樣式 */
+    /* --- 3. 一般樣式優化 --- */
     .stButton > button {
         border-radius: 8px;
         border: 1px solid #eee;
+        width: 100%; /* 按鈕盡量填滿 */
+    }
+    
+    /* 隱藏 Plotly 模式列 */
+    .js-plotly-plot .plotly .modebar {
+        display: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -217,7 +218,7 @@ def show_menu_workspace_page():
     
     st.subheader("今日菜單")
     show_workspace_dashboard()
-    show_workspace_content_table() # 改用新的表格呈現方式
+    show_workspace_content()
     show_workspace_analysis()
     show_shopping_list_generator()
 
@@ -304,7 +305,7 @@ def show_quick_template_panel():
             key = f"{cat}_{i}"
             if key in st.session_state.temp_sels:
                 item = st.session_state.temp_sels[key]
-                c1, c2 = st.columns([0.85, 0.15], vertical_alignment="center")
+                c1, c2 = st.columns([5, 1], vertical_alignment="center")
                 with c1: st.success(f"{cat}: {item['name']}")
                 with c2: 
                     if st.button("✕", key=f"rm_{key}"):
@@ -384,44 +385,44 @@ def show_workspace_dashboard():
     badges = [f"{k}: {v}" for k,v in counts.items()]
     st.info(" | ".join(badges), icon="🍽️")
 
-# ★★★ 新版：使用 Data Editor 取代按鈕清單 ★★★
-def show_workspace_content_table():
+def show_workspace_content():
     if not st.session_state.menu_workspace: return
     
-    # 1. 準備資料給 Data Editor
-    # 我們需要一個 DataFrame，包含 '菜名' 和 '刪除' (checkbox)
+    # ★★★ 重大修改：改用 Data Editor (表格) 來處理刪除 ★★★
+    # 這是解決手機版排版問題的終極方案
+    
+    # 1. 準備顯示用的資料
     data = []
     for item in st.session_state.menu_workspace:
         data.append({
             "菜名": item['name'],
-            "刪除": False # 預設不刪除
+            "分類": item.get('category', '自訂'),
+            "刪除": False # 預設不勾選
         })
     
     df = pd.DataFrame(data)
     
-    # 2. 顯示 Data Editor
+    # 2. 顯示可編輯的表格
     edited_df = st.data_editor(
         df,
-        use_container_width=True,
-        hide_index=True,
         column_config={
-            "菜名": st.column_config.TextColumn("菜名", disabled=True), # 禁止編輯菜名
-            "刪除": st.column_config.CheckboxColumn("移除", width="small") # Checkbox
+            "菜名": st.column_config.TextColumn("菜名", disabled=True, width="medium"),
+            "分類": st.column_config.TextColumn("分類", disabled=True, width="small"),
+            "刪除": st.column_config.CheckboxColumn("移除?", default=False)
         },
+        hide_index=True,
+        use_container_width=True,
         key="workspace_editor"
     )
     
     # 3. 檢查是否有被勾選刪除的項目
-    # 如果使用者勾選了，edited_df 裡的 '刪除' 欄位會變成 True
     if edited_df['刪除'].any():
-        # 保留那些 '刪除' 為 False 的項目 (即未被勾選的)
-        indices_to_keep = edited_df[~edited_df['刪除']].index.tolist()
+        # 找出要保留的項目索引 (沒被勾選的)
+        keep_indices = edited_df[~edited_df['刪除']].index.tolist()
         
-        # 根據 index 更新 session_state
-        new_workspace = [st.session_state.menu_workspace[i] for i in indices_to_keep]
+        # 更新 session_state (只保留沒被勾選的)
+        new_workspace = [st.session_state.menu_workspace[i] for i in keep_indices]
         st.session_state.menu_workspace = new_workspace
-        
-        # 重新整理頁面
         st.rerun()
 
     if st.button("清空工作台", key="clr_ws", use_container_width=True):
