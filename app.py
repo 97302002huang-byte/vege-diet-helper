@@ -14,61 +14,42 @@ st.set_page_config(
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* 1. 標題與分頁籤強制置中 */
-    .stAppHeader {
-        background-color: transparent;
+    /* 1. 極簡標題樣式 */
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        font-weight: 400;
+        color: #2c3e50;
+        text-align: center;
     }
     
-    /* 鎖定 st.title 產生的 h1 */
-    h1 {
-        text-align: center !important;
-        padding-bottom: 10px;
-    }
-    
-    /* 鎖定 Segmented Control 的容器，強制置中 */
+    /* 2. 導航頁籤 (Segmented Control) 滿版優化 */
+    /* 讓容器填滿寬度 */
     div[data-testid="stSegmentedControl"] {
-        margin-left: auto !important;
-        margin-right: auto !important;
-        display: flex;
-        justify-content: center;
+        width: 100% !important;
+    }
+    /* 讓內層 div 填滿 */
+    div[data-testid="stSegmentedControl"] > div {
+        width: 100% !important;
+        display: flex !important;
+    }
+    /* 讓每個按鈕平均分配寬度 (Flex Grow) */
+    div[data-testid="stSegmentedControl"] button {
+        flex: 1 !important;
+        min-width: 0px !important; /* 允許文字縮小以免爆版 */
+        padding-left: 0 !important;
+        padding-right: 0 !important;
     }
     
+    /* 3. 今日菜單按鈕優化 */
+    /* 讓垃圾桶按鈕緊湊一點 */
+    div[data-testid="column"] button {
+        padding: 0.2rem 0.5rem !important;
+        min-height: 0px !important;
+        line-height: 1 !important;
+    }
+
     /* 隱藏 Plotly 模式列 */
     .js-plotly-plot .plotly .modebar {
         display: none !important;
-    }
-
-    /* 2. 手機版強制並排修正 (針對今日菜單移除按鈕) */
-    /* 針對手機寬度 (小於 640px) */
-    @media (max-width: 640px) {
-        /* 找到包含菜名和按鈕的容器 */
-        div[data-testid="stHorizontalBlock"] {
-            flex-direction: row !important; /* 強制橫向 */
-            flex-wrap: nowrap !important;   /* 禁止換行 */
-            align-items: center !important; /* 垂直置中 */
-            gap: 5px !important;            /* 縮小間距 */
-        }
-        
-        /* 菜名欄位 (左) */
-        div[data-testid="column"]:nth-child(1) {
-            flex: 1 1 auto !important; /* 自動填滿剩餘空間 */
-            width: auto !important;
-            min-width: 0 !important;   /* 允許文字壓縮 */
-        }
-        
-        /* 按鈕欄位 (右) */
-        div[data-testid="column"]:nth-child(2) {
-            flex: 0 0 auto !important; /* 不放大也不縮小 */
-            width: auto !important;
-            min-width: 40px !important; /* 給按鈕最小空間 */
-        }
-        
-        /* 調整按鈕大小與邊距 */
-        div[data-testid="column"]:nth-child(2) button {
-            padding: 0.2rem 0.5rem !important;
-            margin: 0 !important;
-            min-height: 30px !important;
-        }
     }
     
     /* 一般按鈕樣式 */
@@ -244,6 +225,7 @@ def show_free_style_panel():
     
     r_cats = db.get_recipe_categories()
     if r_cats:
+        # 手機版自然的堆疊效果 (移除了強制 row 的 CSS)
         c1, c2 = st.columns([1, 2])
         with c1:
             sel_cat = st.selectbox("食譜分類", ["全部"] + r_cats, key="fs_cat_filter", label_visibility="collapsed")
@@ -322,7 +304,8 @@ def show_quick_template_panel():
             key = f"{cat}_{i}"
             if key in st.session_state.temp_sels:
                 item = st.session_state.temp_sels[key]
-                c1, c2 = st.columns([5, 1], vertical_alignment="center")
+                # 使用比例 0.85 vs 0.15 確保按鈕在右邊且同列
+                c1, c2 = st.columns([0.85, 0.15], vertical_alignment="center")
                 with c1: st.success(f"{cat}: {item['name']}")
                 with c2: 
                     if st.button("✕", key=f"rm_{key}"):
@@ -407,9 +390,8 @@ def show_workspace_content():
     
     for i, item in enumerate(st.session_state.menu_workspace):
         with st.container():
-            # 使用 CSS 類別來控制佈局，但在 Python 中我們依賴 st.columns
-            # 關鍵在於上面的 CSS @media 查詢會強制調整這裡的行為
-            c1, c2 = st.columns([6, 1], vertical_alignment="center")
+            # 使用比例 [0.85, 0.15] 將按鈕推到最右邊，且盡量不換行
+            c1, c2 = st.columns([0.85, 0.15], vertical_alignment="center")
             with c1:
                 st.write(f"**{item['name']}**")
             with c2:
@@ -473,6 +455,7 @@ def show_workspace_analysis():
             
             pct = (max(-1, min(1, score/1.5)) + 1) / 2 * 100
             
+            # 移除文字結論
             st.markdown(f"""
             <div style="margin-top:20px; font-size:0.8em; color:#666; display:flex; justify-content:space-between;">
                 <span>❄️寒</span><span>平</span><span>熱🔥</span>
@@ -482,7 +465,7 @@ def show_workspace_analysis():
             </div>
             """, unsafe_allow_html=True)
             
-            st.write("") # Spacer
+            st.write("") 
 
 def show_shopping_list_generator():
     if not st.session_state.menu_workspace: return
@@ -536,9 +519,9 @@ def show_shopping_list_generator():
 def main():
     inject_custom_css()
     
-    # 使用 Markdown 而非 st.title，以便用 CSS 控制置中
     st.markdown("<h1>植感飲食</h1>", unsafe_allow_html=True)
     
+    # 頂部導航
     pages = ["食材", "食譜", "菜單"]
     pg = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
     
