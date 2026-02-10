@@ -19,33 +19,77 @@ def inject_custom_css():
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* 1. 極簡標題樣式 (強制置中修正) */
+    /* 1. 極簡標題樣式 (修復置中問題) */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         font-weight: 400;
         color: #2c3e50;
         text-align: center;
-        /* 強制佔滿寬度，並消除預設邊距影響 */
         width: 100%;
         margin-left: 0 !important;
         margin-right: 0 !important;
         padding-top: 10px;
     }
     
-    /* 2. 導航頁籤優化 */
+    /* 關鍵修正：隱藏標題旁的「連結錨點圖示」，解決無法完美置中問題 */
+    .stMarkdown h1 a, .stMarkdown h2 a, .stMarkdown h3 a {
+        display: none !important;
+    }
+    
+    /* 2. 導航頁籤樣式優化 (iOS 風格) */
+    /* 容器：淺灰底色，圓角 */
     div[data-testid="stSegmentedControl"] {
         width: 100% !important;
+        background-color: #f1f3f6 !important; /* 淺灰底 */
+        padding: 4px !important;
+        border-radius: 12px !important;
+        border: none !important;
         display: flex;
         justify-content: center;
     }
     
-    /* 3. 今日菜單按鈕優化 (表格模式不需要 CSS，自動適應) */
+    /* 內層容器滿版 */
+    div[data-testid="stSegmentedControl"] > div {
+        width: 100% !important;
+        display: flex !important;
+    }
     
+    /* 按鈕本體：平均分配寬度 */
+    div[data-testid="stSegmentedControl"] button {
+        flex: 1 !important;
+        min-width: 0px !important;
+        border: none !important;
+        border-radius: 8px !important;
+        margin: 2px !important;
+        font-weight: 500 !important;
+    }
+    
+    /* 未選中狀態：透明背景 */
+    div[data-testid="stSegmentedControl"] button[aria-selected="false"] {
+        background-color: transparent !important;
+        color: #666 !important;
+    }
+    
+    /* 選中狀態：白色卡片，加陰影 */
+    div[data-testid="stSegmentedControl"] button[aria-selected="true"] {
+        background-color: #ffffff !important;
+        color: #000 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        font-weight: 600 !important;
+    }
+    
+    /* 3. 今日菜單按鈕優化 */
+    div[data-testid="column"] button {
+        padding: 0.2rem 0.5rem !important;
+        min-height: 0px !important;
+        line-height: 1 !important;
+    }
+
     /* 隱藏 Plotly 模式列 */
     .js-plotly-plot .plotly .modebar {
         display: none !important;
     }
     
-    /* 一般按鈕樣式 */
+    /* 一般按鈕樣式 (維持原樣，與導航區隔) */
     .stButton > button {
         border-radius: 8px;
         border: 1px solid #eee;
@@ -195,10 +239,8 @@ def show_recipes_page():
 def show_menu_workspace_page():
     if 'menu_workspace' not in st.session_state: st.session_state.menu_workspace = []
     
-    # 【關鍵修改】使用全形空白 (\u3000) 來物理撐開按鈕寬度
-    # 每個選項前後加兩個全形空白
+    # 使用全形空白 (\u3000) 撐開寬度
     modes = ["　　自由配　　", "　　快速樣板　　", "　　經典套餐　　"]
-    # 建立一個對照表，方便程式邏輯判斷 (因為選到的值會包含空白)
     mode_map = {
         "　　自由配　　": "自由配",
         "　　快速樣板　　": "快速樣板",
@@ -207,9 +249,7 @@ def show_menu_workspace_page():
     
     selected_mode_label = st.segmented_control(None, options=modes, default=modes[0], selection_mode="single", key="menu_mode_selector")
     
-    # 如果沒選到(None)，預設為第一個
     if not selected_mode_label: selected_mode_label = modes[0]
-    
     mode = mode_map[selected_mode_label]
     
     if mode == "自由配":
@@ -310,8 +350,6 @@ def show_quick_template_panel():
             key = f"{cat}_{i}"
             if key in st.session_state.temp_sels:
                 item = st.session_state.temp_sels[key]
-                # 使用 Data Editor 雖然穩，但在這裡只是暫存區，我們維持 columns
-                # 但為了手機穩，我們稍微簡化顯示
                 c1, c2 = st.columns([5, 1], vertical_alignment="center")
                 with c1: st.success(f"{cat}: {item['name']}")
                 with c2: 
@@ -395,38 +433,29 @@ def show_workspace_dashboard():
 def show_workspace_content():
     if not st.session_state.menu_workspace: return
     
-    # 【關鍵修改】使用 st.data_editor (表格模式) 來取代原本的按鈕列表
-    # 這能完美解決手機版按鈕跑版、換行、對不齊的所有問題
-    
-    # 1. 準備表格資料
+    # 使用表格模式 (Data Editor) 顯示菜單
     df_data = []
     for item in st.session_state.menu_workspace:
         df_data.append({
             "菜名": item['name'],
-            "移除": False  # 預設不勾選
+            "移除": False
         })
     
     df = pd.DataFrame(df_data)
     
-    # 2. 顯示可編輯表格
     edited_df = st.data_editor(
         df,
         use_container_width=True,
         column_config={
-            "菜名": st.column_config.TextColumn("菜色名稱", disabled=True), # 禁止改名
+            "菜名": st.column_config.TextColumn("菜色名稱", disabled=True),
             "移除": st.column_config.CheckboxColumn("刪除", help="勾選以移除", default=False)
         },
         hide_index=True,
         key="workspace_editor"
     )
     
-    # 3. 檢查是否有被勾選移除的項目
-    # 如果使用者勾選了，我們就找出沒被勾選的，更新 session_state
     if edited_df['移除'].any():
-        # 找出「沒有」被勾選移除的 index
         keep_indices = edited_df.index[~edited_df['移除']].tolist()
-        
-        # 重建列表
         new_workspace = [st.session_state.menu_workspace[i] for i in keep_indices]
         st.session_state.menu_workspace = new_workspace
         st.rerun()
@@ -551,8 +580,7 @@ def main():
     
     st.markdown("<h1>植感飲食</h1>", unsafe_allow_html=True)
     
-    # 【關鍵修改】使用全形空白 (\u3000) 來物理撐開按鈕寬度
-    # 每個選項前後加兩個全形空白
+    # 導航頁籤
     pages = ["　　食材　　", "　　食譜　　", "　　菜單　　"]
     page_map = {
         "　　食材　　": "食材",
