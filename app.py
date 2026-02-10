@@ -21,30 +21,31 @@ def inject_custom_css():
         text-align: center;
     }
     
-    /* 2. 導航頁籤 (Segmented Control) 滿版優化 */
-    /* 讓容器填滿寬度 */
+    /* 2. 導航頁籤 (Segmented Control) 滿版均分優化 */
+    /* 強制讓 Segmented Control 的外層容器填滿 */
     div[data-testid="stSegmentedControl"] {
         width: 100% !important;
     }
-    /* 讓內層 div 填滿 */
     div[data-testid="stSegmentedControl"] > div {
         width: 100% !important;
         display: flex !important;
     }
-    /* 讓每個按鈕平均分配寬度 (Flex Grow) */
+    /* 關鍵：讓每個選項按鈕平分寬度 (Flex Grow) */
     div[data-testid="stSegmentedControl"] button {
         flex: 1 !important;
-        min-width: 0px !important; /* 允許文字縮小以免爆版 */
+        min-width: 0px !important;
         padding-left: 0 !important;
         padding-right: 0 !important;
+        justify-content: center !important;
     }
     
-    /* 3. 今日菜單按鈕優化 */
-    /* 讓垃圾桶按鈕緊湊一點 */
-    div[data-testid="column"] button {
-        padding: 0.2rem 0.5rem !important;
-        min-height: 0px !important;
-        line-height: 1 !important;
+    /* 3. 今日菜單 Data Editor 優化 */
+    /* 隱藏 Data Editor 的索引列 (如果有的話) */
+    div[data-testid="stDataFrame"] table thead th:first-child {
+        display: none;
+    }
+    div[data-testid="stDataFrame"] table tbody td:first-child {
+        display: none;
     }
 
     /* 隱藏 Plotly 模式列 */
@@ -216,7 +217,7 @@ def show_menu_workspace_page():
     
     st.subheader("今日菜單")
     show_workspace_dashboard()
-    show_workspace_content()
+    show_workspace_content_table() # 改用新的表格呈現方式
     show_workspace_analysis()
     show_shopping_list_generator()
 
@@ -225,7 +226,6 @@ def show_free_style_panel():
     
     r_cats = db.get_recipe_categories()
     if r_cats:
-        # 手機版自然的堆疊效果 (移除了強制 row 的 CSS)
         c1, c2 = st.columns([1, 2])
         with c1:
             sel_cat = st.selectbox("食譜分類", ["全部"] + r_cats, key="fs_cat_filter", label_visibility="collapsed")
@@ -304,7 +304,6 @@ def show_quick_template_panel():
             key = f"{cat}_{i}"
             if key in st.session_state.temp_sels:
                 item = st.session_state.temp_sels[key]
-                # 使用比例 0.85 vs 0.15 確保按鈕在右邊且同列
                 c1, c2 = st.columns([0.85, 0.15], vertical_alignment="center")
                 with c1: st.success(f"{cat}: {item['name']}")
                 with c2: 
@@ -385,21 +384,46 @@ def show_workspace_dashboard():
     badges = [f"{k}: {v}" for k,v in counts.items()]
     st.info(" | ".join(badges), icon="🍽️")
 
-def show_workspace_content():
+# ★★★ 新版：使用 Data Editor 取代按鈕清單 ★★★
+def show_workspace_content_table():
     if not st.session_state.menu_workspace: return
     
-    for i, item in enumerate(st.session_state.menu_workspace):
-        with st.container():
-            # 使用比例 [0.85, 0.15] 將按鈕推到最右邊，且盡量不換行
-            c1, c2 = st.columns([0.85, 0.15], vertical_alignment="center")
-            with c1:
-                st.write(f"**{item['name']}**")
-            with c2:
-                if st.button("🗑️", key=f"rm_ws_{i}"):
-                    st.session_state.menu_workspace.pop(i)
-                    st.rerun()
-            st.divider()
+    # 1. 準備資料給 Data Editor
+    # 我們需要一個 DataFrame，包含 '菜名' 和 '刪除' (checkbox)
+    data = []
+    for item in st.session_state.menu_workspace:
+        data.append({
+            "菜名": item['name'],
+            "刪除": False # 預設不刪除
+        })
     
+    df = pd.DataFrame(data)
+    
+    # 2. 顯示 Data Editor
+    edited_df = st.data_editor(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "菜名": st.column_config.TextColumn("菜名", disabled=True), # 禁止編輯菜名
+            "刪除": st.column_config.CheckboxColumn("移除", width="small") # Checkbox
+        },
+        key="workspace_editor"
+    )
+    
+    # 3. 檢查是否有被勾選刪除的項目
+    # 如果使用者勾選了，edited_df 裡的 '刪除' 欄位會變成 True
+    if edited_df['刪除'].any():
+        # 保留那些 '刪除' 為 False 的項目 (即未被勾選的)
+        indices_to_keep = edited_df[~edited_df['刪除']].index.tolist()
+        
+        # 根據 index 更新 session_state
+        new_workspace = [st.session_state.menu_workspace[i] for i in indices_to_keep]
+        st.session_state.menu_workspace = new_workspace
+        
+        # 重新整理頁面
+        st.rerun()
+
     if st.button("清空工作台", key="clr_ws", use_container_width=True):
         st.session_state.menu_workspace = []
         st.rerun()
@@ -455,7 +479,6 @@ def show_workspace_analysis():
             
             pct = (max(-1, min(1, score/1.5)) + 1) / 2 * 100
             
-            # 移除文字結論
             st.markdown(f"""
             <div style="margin-top:20px; font-size:0.8em; color:#666; display:flex; justify-content:space-between;">
                 <span>❄️寒</span><span>平</span><span>熱🔥</span>
@@ -521,7 +544,6 @@ def main():
     
     st.markdown("<h1>植感飲食</h1>", unsafe_allow_html=True)
     
-    # 頂部導航
     pages = ["食材", "食譜", "菜單"]
     pg = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
     
