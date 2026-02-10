@@ -8,52 +8,78 @@ st.set_page_config(
     page_title="植感飲食",
     page_icon="🥗",
     layout="wide",
-    initial_sidebar_state="collapsed" # 預設收起側邊欄 (雖然我們不用它了)
+    initial_sidebar_state="collapsed" # 預設收起側邊欄，因為我們有頂部導航
 )
 
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* 隱藏預設的側邊欄選單按鈕 (漢堡選單雖無法完全移除，但可弱化) */
-    [data-testid="stSidebarCollapsedControl"] {
+    /* 隱藏預設漢堡選單與側邊欄 (如果完全不想用的話) */
+    /* [data-testid="stSidebar"] { display: none; } */
+    
+    /* 1. 頂部導航按鈕優化 */
+    /* 鎖定最上方的 radio 元件進行樣式調整 */
+    div[role="radiogroup"] {
+        display: flex;
+        justify-content: center; /* 水平置中 */
+        width: 100%;
+        background-color: #f8f9fa; /* 淺灰背景區隔 */
+        padding: 10px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    /* 導航按鈕本體 */
+    div[role="radiogroup"] label {
+        flex: 1; /* 平均分配寬度 */
+        text-align: center;
+        margin: 0 5px !important;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px !important;
+        background-color: white;
+        transition: all 0.3s;
+    }
+    
+    /* 選中狀態 - 深色凸顯 */
+    div[role="radiogroup"] label[data-selected="true"] {
+        background-color: #2c3e50 !important;
+        color: white !important;
+        border-color: #2c3e50 !important;
+        font-weight: bold;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    /* 隱藏 Radio 的圓圈圈 */
+    div[role="radiogroup"] label div:first-child {
         display: none;
     }
-    
-    /* 頂部大標題樣式 */
-    .app-header {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #2c3e50;
-        text-align: center;
-        margin-bottom: 0.5rem;
-        font-family: "Microsoft JhengHei", sans-serif;
-    }
-    
-    /* 膠囊導航列置中 */
-    [data-testid="stUnknown"] {
-        justify-content: center;
-    }
-    
-    /* 減少按鈕 emoji 與樣式微調 */
+
+    /* 2. 一般按鈕樣式 (區隔導航) */
     .stButton > button {
+        border-radius: 8px;
         font-weight: 500;
-        border-radius: 12px;
+        border: 1px solid #ddd;
     }
     
+    /* 3. 今日菜單移除按鈕 (垃圾桶) 優化 */
+    /* 讓按鈕不要換行，並縮小內距 */
+    div[data-testid="column"] button {
+        padding: 0.25rem 0.5rem;
+        min-height: 0px;
+        height: auto;
+    }
+
     /* 極簡標題樣式 */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         font-weight: 400;
         color: #2c3e50;
+        text-align: center; /* 標題也置中比較好看 */
     }
     
     /* 隱藏 Plotly 模式列 */
     .js-plotly-plot .plotly .modebar {
         display: none !important;
-    }
-    
-    /* 優化手機版表格顯示 */
-    [data-testid="stDataFrame"] {
-        width: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -61,49 +87,35 @@ def inject_custom_css():
 # --- 2. 頁面功能函數 ---
 
 def show_ingredients_page():
-    # 篩選器區域 (改用 Pills 避免鍵盤彈出)
-    # 分類篩選
-    categories = db.get_categories()
-    selected_categories = st.pills("分類篩選", categories, selection_mode="multi", key="filter_categories")
+    # 搜尋欄位
+    search_keyword = st.text_input("🔍 搜尋食材", placeholder="輸入名稱或功效...", key="search_keyword")
     
-    # 五色篩選 & 食性篩選 (放在 Expander 以節省空間，或者直接顯示)
-    # 為了版面整潔，將次要篩選放在 Expander，或者直接列出
-    # 這裡採用直接列出，但分行
+    # 簡易篩選器 (使用 Pills 避免手機跳鍵盤)
+    # 這裡簡化為只顯示最重要的分類篩選，節省手機空間
+    categories = ["全部"] + db.get_categories()
+    selected_cat = st.pills("分類篩選", categories, default="全部", selection_mode="single")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        five_colors = db.get_five_colors()
-        selected_colors = st.pills("五色", five_colors, selection_mode="multi", key="filter_colors")
-    with col2:
-        natures = db.get_natures()
-        selected_natures = st.pills("食性", natures, selection_mode="multi", key="filter_natures")
-    
-    # 關鍵字搜尋 (保留輸入框，這是唯一會跳鍵盤的地方)
-    search_keyword = st.text_input("搜尋", placeholder="輸入食材名稱或功效...", key="search_keyword")
-    
-    # 獲取資料
+    # 資料處理
     all_ingredients = db.get_all_ingredients()
-    
-    if not all_ingredients:
-        st.info("資料庫中沒有食材資料，請先匯入 CSV 檔案")
-        return
-
-    # 套用篩選條件
     filtered_ingredients = []
+    
     for ingredient in all_ingredients:
-        if selected_categories and ingredient['category'] not in selected_categories: continue
-        if selected_colors and ingredient['five_color'] not in selected_colors: continue
-        if selected_natures and ingredient['nature'] not in selected_natures: continue
+        # 分類篩選
+        if selected_cat != "全部" and ingredient['category'] != selected_cat:
+            continue
+        
+        # 關鍵字搜尋
         if search_keyword:
             kw = search_keyword.lower()
             if kw not in ingredient['name'].lower() and (not ingredient['effects'] or kw not in ingredient['effects'].lower()):
                 continue
+                
         filtered_ingredients.append(ingredient)
     
     st.caption(f"共 {len(filtered_ingredients)} 項食材")
     
     if not filtered_ingredients:
-        st.info("沒有符合篩選條件的食材")
+        st.info("沒有符合條件的食材")
         return
     
     # 準備 DataFrame 資料
@@ -111,145 +123,130 @@ def show_ingredients_page():
     for ing in filtered_ingredients:
         df_data.append({
             '食材名稱': ing['name'],
-            '分類': ing['category'],
-            '五色': ing['five_color'],
             '食性': ing['nature'],
+            '五色': ing['five_color'],
             '功效': ing['effects'] or '',
         })
     
     df = pd.DataFrame(df_data)
     
-    # 顯示表格 (固定欄位 + 不隱藏資訊)
+    # 手機版優化表格：固定第一欄，隱藏不重要的欄位
     st.dataframe(
         df,
         use_container_width=True,
         hide_index=True,
         column_config={
-            "食材名稱": st.column_config.TextColumn(
-                "食材", 
-                pinned=True,   # 關鍵：固定欄位
-                width="medium" # 適當寬度
-            ),
-            "分類": st.column_config.TextColumn("分類", width="small"),
-            "五色": st.column_config.TextColumn("五色", width="small"),
+            "食材名稱": st.column_config.TextColumn("食材", width="small", pinned=True), # 固定
             "食性": st.column_config.TextColumn("食性", width="small"),
+            "五色": st.column_config.TextColumn("五色", width="small"),
             "功效": st.column_config.TextColumn("功效", width="large"),
         }
     )
 
 def show_recipes_page():
-    # 新增食譜區塊
-    with st.expander("建立新食譜", expanded=False):
-        c1, c2 = st.columns([1, 2])
+    # 新增食譜區塊 (預設收起，保持版面乾淨)
+    with st.expander("➕ 建立新食譜", expanded=False):
+        # 手機上單欄顯示比較好操作
+        st.text_input("食譜名稱", key="new_recipe_name")
+        st.selectbox("分類", db.get_recipe_categories(), key="new_recipe_category")
+        st.text_area("描述", key="new_recipe_description", height=80)
         
-        with c1:
-            st.text_input("食譜名稱", key="new_recipe_name")
-            st.selectbox("分類", db.get_recipe_categories(), key="new_recipe_category")
-            st.text_area("描述", key="new_recipe_description", height=100)
+        st.write("---")
+        st.write("**選擇食材**")
         
-        with c2:
-            st.write("**選擇食材**")
-            # 獲取所有食材並格式化
-            all_ingredients = db.get_all_ingredients()
-            formatted_opts = [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients]
-            
-            # 分類篩選邏輯 (改用 Pills 避免鍵盤)
-            ing_cats = db.get_categories()
-            # 為了避免 Pills 佔用太多空間，預設選 "全部顯示"
-            filter_cat = st.pills("篩選食材分類", ["全部顯示"] + ing_cats, default="全部顯示", key="new_recipe_cat_filter")
-            
-            # 決定當前分類的選項
-            if not filter_cat or filter_cat == "全部顯示":
-                current_cat_opts = formatted_opts
-            else:
-                current_cat_opts = [opt for opt in formatted_opts if f"【{filter_cat}】" in opt]
-            
-            # Sticky Selection: 確保已選的項目不會因為切換分類而消失
-            current_selection = st.session_state.get("new_recipe_ings_sel", [])
-            merged_options = sorted(list(set(current_cat_opts + current_selection)))
-            
-            # 顯示多選選單
-            st.multiselect(
-                "搜尋並選擇食材",
-                options=merged_options,
-                key="new_recipe_ings_sel"
-            )
-            
-            # 定義 Callback 函數
-            def save_recipe_callback():
-                r_name = st.session_state.new_recipe_name
-                r_cat = st.session_state.new_recipe_category
-                r_desc = st.session_state.new_recipe_description
-                r_ings = st.session_state.new_recipe_ings_sel
-                
-                if r_name and r_ings:
-                    try:
-                        final_ids = []
-                        for option in r_ings:
-                            name = option.split("】")[1] if "】" in option else option
-                            ing_db = db.get_ingredient_by_name(name)
-                            if ing_db:
-                                final_ids.append(ing_db['id'])
-                        
-                        rid = db.add_recipe(r_name, r_cat, r_desc)
-                        db.set_recipe_ingredients(rid, final_ids)
-                        st.toast('食譜已新增！')
-                        
-                        # 清空輸入
-                        st.session_state.new_recipe_name = ""
-                        st.session_state.new_recipe_description = ""
-                        st.session_state.new_recipe_ings_sel = []
-                        
-                    except Exception as e:
-                        st.toast(f"錯誤: {e}", icon="❌")
-                else:
-                    st.toast("請輸入名稱並選擇至少一種食材", icon="⚠️")
+        # 使用 Tabs 分類食材
+        all_ingredients = db.get_all_ingredients()
+        tabs = st.tabs(["🥬 蔬果", "🍄 蛋豆菇", "🌾 主食", "🧂 其他"])
+        
+        def get_options(cats):
+            return [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients if ing['category'] in cats]
 
-            st.write("") 
-            st.button("儲存食譜", type="primary", use_container_width=True, on_click=save_recipe_callback)
+        with tabs[0]: # 蔬果
+            opts1 = get_options(['葉菜類', '根莖類', '花果類', '水果類'])
+            st.multiselect("選擇蔬果", opts1, key="tab_veg")
+        
+        with tabs[1]: # 蛋豆菇
+            opts2 = get_options(['豆製品', '蛋奶類', '菇菌類'])
+            st.multiselect("選擇蛋白質", opts2, key="tab_prot")
+            
+        with tabs[2]: # 主食
+            opts3 = get_options(['五穀雜糧', '堅果種子類'])
+            st.multiselect("選擇主食", opts3, key="tab_grain")
+            
+        with tabs[3]: # 其他
+            covered = ['葉菜類', '根莖類', '花果類', '水果類', '豆製品', '蛋奶類', '菇菌類', '五穀雜糧', '堅果種子類']
+            opts4 = [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients if ing['category'] not in covered]
+            st.multiselect("選擇調味/其他", opts4, key="tab_other")
+
+        def save_recipe_callback():
+            r_name = st.session_state.new_recipe_name
+            r_cat = st.session_state.new_recipe_category
+            r_desc = st.session_state.new_recipe_description
+            all_sels = (st.session_state.get("tab_veg", []) + st.session_state.get("tab_prot", []) + 
+                        st.session_state.get("tab_grain", []) + st.session_state.get("tab_other", []))
+            
+            if r_name and all_sels:
+                try:
+                    final_ids = []
+                    for option in all_sels:
+                        name = option.split("】")[1] if "】" in option else option
+                        ing_db = db.get_ingredient_by_name(name)
+                        if ing_db: final_ids.append(ing_db['id'])
+                    
+                    rid = db.add_recipe(r_name, r_cat, r_desc)
+                    db.set_recipe_ingredients(rid, final_ids)
+                    st.toast('✅ 食譜已新增！')
+                    # 清空
+                    st.session_state.new_recipe_name = ""
+                    st.session_state.new_recipe_description = ""
+                    st.session_state.tab_veg = []
+                    st.session_state.tab_prot = []
+                    st.session_state.tab_grain = []
+                    st.session_state.tab_other = []
+                except Exception as e:
+                    st.toast(f"錯誤: {e}", icon="❌")
+            else:
+                st.toast("請輸入名稱並選擇食材", icon="⚠️")
+
+        st.button("儲存食譜", type="primary", use_container_width=True, on_click=save_recipe_callback)
     
     st.divider()
     
-    # 顯示食譜列表
+    # 顯示食譜列表 (移除刪除按鈕)
     recipes = db.get_all_recipes()
     if recipes:
+        # 分類顯示
         cats = db.get_recipe_categories()
-        tabs = st.tabs(cats)
+        # 手機上 Tabs 太多會很難點，改用 Selectbox 篩選
+        view_cat = st.selectbox("瀏覽分類", ["全部"] + cats)
         
-        for i, cat in enumerate(cats):
-            with tabs[i]:
-                cat_recipes = [r for r in recipes if r['category'] == cat]
-                if cat_recipes:
-                    for recipe in cat_recipes:
-                        details = db.get_recipe_with_ingredients(recipe['id'])
-                        ing_count = len(details.get('ingredients', []))
-                        
-                        with st.expander(f"{details['name']} ({ing_count}食材)"):
-                            c1, c2 = st.columns([4, 1])
-                            with c1:
-                                if details['description']: st.caption(details['description'])
-                                ings = [f"{ing['name']}" for ing in details.get('ingredients', [])]
-                                st.write(" | ".join(ings))
-                            with c2:
-                                if st.button("刪除", key=f"del_{recipe['id']}"):
-                                    db.delete_recipe(recipe['id'])
-                                    st.rerun()
-                else:
-                    st.caption("無食譜")
+        display_recipes = recipes if view_cat == "全部" else [r for r in recipes if r['category'] == view_cat]
+        
+        if display_recipes:
+            for recipe in display_recipes:
+                details = db.get_recipe_with_ingredients(recipe['id'])
+                ing_count = len(details.get('ingredients', []))
+                
+                with st.expander(f"{details['name']} ({ing_count}食材)"):
+                    if details['description']: st.caption(details['description'])
+                    ings = [f"{ing['name']}" for ing in details.get('ingredients', [])]
+                    st.write("、".join(ings))
+                    # 這裡移除了刪除按鈕
+        else:
+            st.info("此分類暫無食譜")
     else:
         st.info("暫無食譜")
 
 def show_menu_workspace_page():
-    # 初始化
     if 'menu_workspace' not in st.session_state: st.session_state.menu_workspace = []
     
-    # 上方模式選擇 (Pills)
-    modes = ["自由配", "🍱 快速樣板", "經典套餐"]
-    mode = st.pills(None, options=modes, default=modes[0], selection_mode="single", key="menu_mode_select")
+    # 上方模式選擇 (移除 icon)
+    modes = ["自由配", "快速樣板", "經典套餐"]
+    mode = st.pills(None, options=modes, default=modes[0], selection_mode="single")
     
     if mode == "自由配":
         show_free_style_panel()
-    elif mode == "🍱 快速樣板":
+    elif mode == "快速樣板":
         show_quick_template_panel()
     elif mode == "經典套餐":
         show_set_menu_panel()
@@ -264,83 +261,72 @@ def show_menu_workspace_page():
     show_shopping_list_generator()
 
 def show_free_style_panel():
-    col1, col2 = st.columns(2)
+    # 手機版改為上下排列，不要左右分欄，比較好操作
+    st.caption("方式 A：從食譜挑選") # 改名
     
-    # 左欄：從食譜書挑選
-    with col1:
-        st.subheader("從食譜書挑選")
-        
-        r_cats = db.get_recipe_categories()
-        if r_cats:
-            # 改用 Pills 篩選食譜分類
-            sel_cat = st.pills("篩選食譜分類", ["全部顯示"] + r_cats, default="全部顯示", key="fs_cat_filter")
-            
+    r_cats = db.get_recipe_categories()
+    if r_cats:
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            sel_cat = st.selectbox("食譜分類", ["全部"] + r_cats, key="fs_cat_filter", label_visibility="collapsed")
+        with c2:
             all_recipes = db.get_all_recipes()
-            if sel_cat and sel_cat != "全部顯示":
+            if sel_cat != "全部":
                 filtered_recipes = [r for r in all_recipes if r['category'] == sel_cat]
             else:
                 filtered_recipes = all_recipes
                 
             if filtered_recipes:
                 opts = {f"{r['name']}": r['id'] for r in filtered_recipes}
-                sel_recipe = st.selectbox("選擇食譜", list(opts.keys()), key="fs_recipe_sel")
+                sel_recipe = st.selectbox("選擇食譜", list(opts.keys()), key="fs_recipe_sel", label_visibility="collapsed")
                 
-                if st.button("加入食譜", key="add_free", use_container_width=True):
+                # 使用 full container width 按鈕
+                if st.button("＋ 加入食譜", key="add_free", use_container_width=True):
                     r = db.get_recipe_by_id(opts[sel_recipe])
                     st.session_state.menu_workspace.append({'type':'recipe', **r})
-                    st.rerun()
+                    st.toast(f"已加入：{r['name']}")
             else:
-                st.info("此分類下暫無食譜")
-        else:
-            st.info("暫無食譜資料")
-            
-    # 右欄：自訂菜色 (DIY)
-    with col2:
-        st.subheader("自訂菜色 (DIY)")
-        st.text_input("菜名", placeholder="例如: 燙青菜", key="fs_diy_name")
+                st.info("無食譜")
+    
+    st.write("") # Spacer
+    st.caption("方式 B：自訂菜色 (DIY)")
+    
+    c_name = st.text_input("菜名", placeholder="例如: 燙青菜", key="fs_diy_name")
+    
+    # DIY 選食材 (Sticky)
+    all_ingredients = db.get_all_ingredients()
+    formatted_opts = [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients]
+    
+    filter_ing_cat = st.selectbox("篩選食材分類", ["全部"] + db.get_categories(), key="fs_diy_cat_filter")
+    
+    if filter_ing_cat == "全部":
+        current_cat_opts = formatted_opts
+    else:
+        current_cat_opts = [opt for opt in formatted_opts if f"【{filter_ing_cat}】" in opt]
         
-        # DIY 食材選擇優化
-        all_ingredients = db.get_all_ingredients()
-        formatted_opts = [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients]
-        
-        ing_cats = db.get_categories()
-        # 改用 Pills
-        filter_ing_cat = st.pills("篩選食材分類", ["全部顯示"] + ing_cats, default="全部顯示", key="fs_diy_cat_filter")
-        
-        if not filter_ing_cat or filter_ing_cat == "全部顯示":
-            current_cat_opts = formatted_opts
-        else:
-            current_cat_opts = [opt for opt in formatted_opts if f"【{filter_ing_cat}】" in opt]
-            
-        # Sticky Selection
-        current_selection = st.session_state.get("fs_diy_ing_sel", [])
-        merged_options = sorted(list(set(current_cat_opts + current_selection)))
-        
-        st.multiselect("選擇食材", options=merged_options, key="fs_diy_ing_sel")
-        
-        def add_diy_callback():
-            c_name = st.session_state.fs_diy_name
-            c_ings = st.session_state.fs_diy_ing_sel
-            
-            if c_name and c_ings:
-                clean_ings = [opt.split("】")[1] if "】" in opt else opt for opt in c_ings]
-                st.session_state.menu_workspace.append({
-                    'type':'custom', 
-                    'name':c_name, 
-                    'ingredients':clean_ings, 
-                    'category':'自訂'
-                })
-                # 清空
-                st.session_state.fs_diy_name = ""
-                st.session_state.fs_diy_ing_sel = []
-                st.toast('自訂菜色已加入！')
-            elif not c_name:
-                st.toast("請輸入菜名", icon="⚠️")
+    current_selection = st.session_state.get("fs_diy_ing_sel", [])
+    merged_options = sorted(list(set(current_cat_opts + current_selection)))
+    
+    st.multiselect("包含食材", options=merged_options, key="fs_diy_ing_sel")
+    
+    def add_diy_callback():
+        c_name = st.session_state.fs_diy_name
+        c_ings = st.session_state.fs_diy_ing_sel
+        if c_name and c_ings:
+            clean_ings = [opt.split("】")[1] if "】" in opt else opt for opt in c_ings]
+            st.session_state.menu_workspace.append({
+                'type':'custom', 'name':c_name, 'ingredients':clean_ings, 'category':'自訂'
+            })
+            st.session_state.fs_diy_name = ""
+            st.session_state.fs_diy_ing_sel = []
+            st.toast('✅ 自訂菜色已加入！')
+        elif not c_name:
+            st.toast("請輸入菜名", icon="⚠️")
 
-        st.button("加入自訂", key="add_cust_free", use_container_width=True, on_click=add_diy_callback)
+    st.button("＋ 加入自訂", key="add_cust_free", use_container_width=True, on_click=add_diy_callback)
 
 def show_quick_template_panel():
-    scenarios = ['1人獨享', '2人世界', '3-4人小家庭', '5-6人聚餐', '10人家族聚會', '20人中型派對', '30人大型宴會']
+    scenarios = ['1人獨享', '2人世界', '3-4人小家庭', '5-6人聚餐', '10人家族聚會', '20人中型派對']
     sel_scn = st.selectbox("選擇用餐情境", scenarios)
     
     blueprints = {
@@ -349,81 +335,61 @@ def show_quick_template_panel():
         '3-4人小家庭': {'主菜': 2, '配菜': 1, '主食': 1, '湯品': 1},
         '5-6人聚餐': {'主菜': 3, '配菜': 2, '主食': 1, '湯品': 1, '甜點/飲料': 1},
         '10人家族聚會': {'主菜': 4, '配菜': 2, '主食': 2, '湯品': 1, '甜點/飲料': 1},
-        '20人中型派對': {'主菜': 5, '配菜': 3, '主食': 2, '湯品': 2, '甜點/飲料': 2},
-        '30人大型宴會': {'主菜': 6, '配菜': 4, '主食': 3, '湯品': 2, '甜點/飲料': 3}
+        '20人中型派對': {'主菜': 5, '配菜': 3, '主食': 2, '湯品': 2, '甜點/飲料': 2}
     }
     
     bp = blueprints.get(sel_scn, {})
     if 'temp_sels' not in st.session_state: st.session_state.temp_sels = {}
     
-    cols = st.columns(4)
-    idx = 0
+    # 手機版不分欄，直接垂直排列
     for cat, count in bp.items():
         for i in range(count):
             key = f"{cat}_{i}"
-            with cols[idx % 4]:
-                if key in st.session_state.temp_sels:
-                    item = st.session_state.temp_sels[key]
-                    st.success(f"{cat}: {item['name']}")
-                    if st.button("移除", key=f"rm_{key}"):
+            if key in st.session_state.temp_sels:
+                item = st.session_state.temp_sels[key]
+                c1, c2 = st.columns([4, 1])
+                with c1: st.success(f"{cat}: {item['name']}")
+                with c2: 
+                    if st.button("✕", key=f"rm_{key}"):
                         del st.session_state.temp_sels[key]
                         st.rerun()
-                else:
-                    if st.button(f"＋ {cat}", key=f"add_{key}", type="primary", use_container_width=True):
-                        show_slot_dialog(key, cat)
-            idx += 1
+            else:
+                if st.button(f"＋ 選擇 {cat}", key=f"add_{key}", type="secondary", use_container_width=True):
+                    show_slot_dialog(key, cat)
             
     if st.session_state.temp_sels:
-        if st.button("納入菜單", type="primary"):
+        st.write("")
+        if st.button("🚀 全部納入菜單", type="primary", use_container_width=True):
             for v in st.session_state.temp_sels.values():
                 st.session_state.menu_workspace.append(v)
             st.session_state.temp_sels = {}
+            st.toast("已加入工作台！")
             st.rerun()
 
 @st.dialog("選擇菜色")
 def show_slot_dialog(key, cat):
-    t1, t2 = st.tabs(["從食譜書挑選", "DIY 自訂"])
+    t1, t2 = st.tabs(["從食譜挑選", "DIY"])
     with t1:
         rs = [r for r in db.get_all_recipes() if r['category'] == cat]
         if rs:
             opts = {r['name']: r for r in rs}
             s = st.selectbox("選擇", list(opts.keys()), key=f"s_{key}")
-            if st.button("確認", key=f"b_{key}"):
+            if st.button("確認", key=f"b_{key}", type="primary", use_container_width=True):
                 r = opts[s]
                 st.session_state.temp_sels[key] = {'type':'recipe', **r}
                 st.rerun()
         else:
             st.info("無此類食譜")
     with t2:
-        st.text_input("菜名", key=f"cn_{key}")
+        c_name = st.text_input("菜名", key=f"cn_{key}")
+        # DIY 邏輯簡化
+        all_ings = [i['name'] for i in db.get_all_ingredients()]
+        c_ings = st.multiselect("食材", options=all_ings, key=f"ci_{key}")
         
-        # DIY (Pills + Sticky Selection)
-        all_ingredients = db.get_all_ingredients()
-        formatted_opts = [f"【{ing['category']}】{ing['name']}" for ing in all_ingredients]
-        ing_cats = db.get_categories()
-        
-        filter_cat = st.pills("篩選分類", ["全部顯示"] + ing_cats, default="全部顯示", key=f"diy_filter_{key}")
-        
-        if not filter_cat or filter_cat == "全部顯示":
-            current_cat_opts = formatted_opts
-        else:
-            current_cat_opts = [opt for opt in formatted_opts if f"【{filter_cat}】" in opt]
-            
-        sel_key = f"ci_{key}"
-        current_selection = st.session_state.get(sel_key, [])
-        merged_options = sorted(list(set(current_cat_opts + current_selection)))
-        
-        c_ings = st.multiselect("包含食材", options=merged_options, key=sel_key)
-        
-        if st.button("確認自訂", key=f"bc_{key}"):
-            c_name = st.session_state[f"cn_{key}"]
+        if st.button("確認", key=f"bc_{key}", type="primary", use_container_width=True):
             if c_name:
-                clean_ings = [opt.split("】")[1] if "】" in opt else opt for opt in c_ings]
                 st.session_state.temp_sels[key] = {
-                    'type':'custom', 
-                    'name':c_name, 
-                    'category': cat,
-                    'ingredients': clean_ings
+                    'type':'custom', 'name':c_name, 'category': cat, 'ingredients': c_ings
                 }
                 st.rerun()
 
@@ -437,12 +403,11 @@ def show_set_menu_panel():
             details = db.get_menu_set_with_recipes(sid)
             if details['description']: st.caption(details['description'])
             
-            # 簡化顯示
             for r in details['recipes']:
                 desc = f" ({r['description']})" if r['description'] else ""
                 st.write(f"• {r['name']}{desc}")
                 
-            if st.button("納入菜單", type="primary"):
+            if st.button("納入菜單", type="primary", use_container_width=True):
                 for r in details['recipes']:
                     st.session_state.menu_workspace.append({'type':'recipe', **r})
                 st.toast("已載入套餐！")
@@ -460,36 +425,38 @@ def show_workspace_dashboard():
         cat = item.get('category', '自訂')
         counts[cat] = counts.get(cat, 0) + 1
     
+    # 標籤樣式優化
     badges = [f"{k}: {v}" for k,v in counts.items()]
-    st.markdown(" | ".join(badges))
+    st.info(" | ".join(badges), icon="🍽️")
 
 def show_workspace_content():
     if not st.session_state.menu_workspace: return
     
     for i, item in enumerate(st.session_state.menu_workspace):
         with st.container():
-            # 優化版面比例：文字 8, 按鈕 2 (確保按鈕不掉下來)
-            # vertical_alignment="center" 確保垂直置中
-            c1, c2 = st.columns([8, 2], vertical_alignment="center")
+            # 調整比例：給文字更多空間 (5:1)，垂直置中
+            c1, c2 = st.columns([5, 1], vertical_alignment="center")
             with c1:
                 st.write(f"**{item['name']}**")
             with c2:
+                # 垃圾桶按鈕
                 if st.button("🗑️", key=f"rm_ws_{i}"):
                     st.session_state.menu_workspace.pop(i)
                     st.rerun()
+            st.divider() # 每個項目之間加分隔線
     
-    if st.button("清空工作台", key="clr_ws"):
+    if st.button("清空工作台", key="clr_ws", use_container_width=True):
         st.session_state.menu_workspace = []
         st.rerun()
 
 def show_workspace_analysis():
     if not st.session_state.menu_workspace: return
     
-    st.divider()
+    st.write("---") # 分隔線
     c1, c2 = st.columns(2)
     
     with c1:
-        st.write("五色平衡")
+        st.write("**五色平衡**")
         colors_list = []
         for item in st.session_state.menu_workspace:
             ings = []
@@ -503,7 +470,6 @@ def show_workspace_analysis():
 
         if colors_list:
             counts = {c: colors_list.count(c) for c in set(colors_list) if c != '未知'}
-            
             color_map = {'青':'#4CAF50', '赤':'#F44336', '黃':'#FFC107', '白':'#E0E0E0', '黑':'#424242'}
             labels = list(counts.keys())
             values = list(counts.values())
@@ -514,11 +480,10 @@ def show_workspace_analysis():
                 marker_colors=cols, textinfo='none', hoverinfo='skip', showlegend=False
             )])
             fig.update_layout(margin=dict(t=0,b=0,l=0,r=0), height=150, paper_bgcolor='rgba(0,0,0,0)')
-            
             st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True, 'displayModeBar': False})
             
     with c2:
-        st.write("食性分析")
+        st.write("**食性分析**")
         natures = []
         for item in st.session_state.menu_workspace:
             if item['type'] == 'recipe':
@@ -533,21 +498,20 @@ def show_workspace_analysis():
             scores = {'熱':2, '溫':1, '平':0, '涼':-1, '寒':-2}
             score = sum(scores.get(n,0) for n in natures) / len(natures)
             
-            res = "平和均衡 ⚖️"
-            if score > 0.5: res = "偏溫補 🔥"
-            elif score < -0.5: res = "偏清涼 ❄️"
-            
-            st.markdown(f"<h4 style='text-align:center;margin:0;'>{res}</h4>", unsafe_allow_html=True)
-            
+            # 移除文字結論，只保留滑桿
             pct = (max(-1, min(1, score/1.5)) + 1) / 2 * 100
+            
             st.markdown(f"""
-            <div style="margin-top:15px; font-size:0.8em; color:#666; display:flex; justify-content:space-between;">
+            <div style="margin-top:20px; font-size:0.8em; color:#666; display:flex; justify-content:space-between;">
                 <span>❄️寒</span><span>平</span><span>熱🔥</span>
             </div>
-            <div style="height:8px; background:linear-gradient(90deg, #81D4FA, #A5D6A7, #EF9A9A); border-radius:4px; position:relative;">
+            <div style="height:8px; background:linear-gradient(90deg, #81D4FA, #A5D6A7, #EF9A9A); border-radius:4px; position:relative; margin-bottom: 20px;">
                 <div style="position:absolute; left:{pct}%; top:-4px; width:4px; height:16px; background:#333; transform:translateX(-50%); border-radius:2px;"></div>
             </div>
             """, unsafe_allow_html=True)
+            
+            # 加一個空白區塊，避免跟下面的按鈕重疊
+            st.write("") 
 
 def show_shopping_list_generator():
     if not st.session_state.menu_workspace: return
@@ -580,40 +544,36 @@ def show_shopping_list_generator():
         
         c1, c2 = st.columns(2)
         with c1:
-            st.write("**📦 核心食材**")
+            st.write("**核心食材**")
             for i in core_ings: st.write(f"• {i}")
         
         with c2:
-            st.write("**🧂 調味品檢查**")
+            st.write("**調味品檢查**")
             if 'miss_conds' not in st.session_state: st.session_state.miss_conds = []
-            
-            # 使用 Pills 取代 Multiselect (避免鍵盤)
-            sel = st.pills("勾選缺少項目", condiments, selection_mode="multi", key="ms_conds")
+            # 使用 Pills 代替 Multiselect，避免手機跳鍵盤 (如果項目太多才用 select)
+            if len(condiments) < 10:
+                sel = st.pills("勾選缺少項目", condiments, selection_mode="multi", key="ms_conds")
+            else:
+                sel = st.multiselect("勾選缺少項目", condiments, key="ms_conds_multi")
             st.session_state.miss_conds = sel
             
         final = core_ings + st.session_state.miss_conds
         if final:
-            st.write("---")
-            st.write("**📋 最終清單 (可複製)**")
             txt = "\n".join([f"- {i}" for i in final])
             st.code(txt, language="text")
 
 def main():
     inject_custom_css()
     
-    # Header 區域
-    st.markdown('<div class="app-header">植感飲食</div>', unsafe_allow_html=True)
+    st.title("植感飲食")
     
-    # 頂部膠囊導航
+    # 1. 頂部導航按鈕 (置中 + 樣式優化)
     pages = ["食材", "食譜", "菜單"]
-    pg = st.pills(None, pages, default=pages[0], selection_mode="single", label_visibility="collapsed")
-    
-    st.markdown("---") # 分隔線
+    pg = st.radio("導覽", pages, horizontal=True, label_visibility="collapsed")
     
     if pg == "食材": show_ingredients_page()
     elif pg == "食譜": show_recipes_page()
     elif pg == "菜單": show_menu_workspace_page()
-    else: show_ingredients_page() # 預設
 
 if __name__ == "__main__":
     main()
