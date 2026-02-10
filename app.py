@@ -14,85 +14,84 @@ st.set_page_config(
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* 隱藏預設的 Header, Footer, Hamburger Menu */
+    /* 隱藏預設元件 */
     header {visibility: hidden;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* 1. 極簡標題樣式 (修復置中問題) */
+    /* 1. 標題樣式 (置中 + 隱藏錨點) */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-        font-weight: 400;
-        color: #2c3e50;
         text-align: center;
         width: 100%;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
+        margin: 0 !important;
         padding-top: 10px;
+        color: #2c3e50;
     }
+    .stMarkdown h1 a { display: none !important; }
     
-    /* 關鍵修正：隱藏標題旁的「連結錨點圖示」，解決無法完美置中問題 */
-    .stMarkdown h1 a, .stMarkdown h2 a, .stMarkdown h3 a {
-        display: none !important;
-    }
+    /* 2. 導航頁籤 (Segmented Control) 大改造 */
     
-    /* 2. 導航頁籤樣式優化 (iOS 風格) */
-    /* 容器：淺灰底色，圓角 */
+    /* 外框容器：淺灰底 */
     div[data-testid="stSegmentedControl"] {
         width: 100% !important;
-        background-color: #f1f3f6 !important; /* 淺灰底 */
-        padding: 4px !important;
+        background-color: #f0f2f6 !important;
+        padding: 5px !important;
         border-radius: 12px !important;
         border: none !important;
-        display: flex;
-        justify-content: center;
+        margin-top: 10px;
+        margin-bottom: 20px;
     }
     
-    /* 內層容器滿版 */
+    /* 內層排版 */
     div[data-testid="stSegmentedControl"] > div {
         width: 100% !important;
-        display: flex !important;
     }
     
-    /* 按鈕本體：平均分配寬度 */
+    /* 按鈕本體 */
     div[data-testid="stSegmentedControl"] button {
-        flex: 1 !important;
-        min-width: 0px !important;
+        flex: 1 !important; /* 強制平分寬度 */
+        min-width: 0 !important;
         border: none !important;
+        margin: 0 2px !important;
         border-radius: 8px !important;
-        margin: 2px !important;
-        font-weight: 500 !important;
+        transition: all 0.2s ease;
     }
     
-    /* 未選中狀態：透明背景 */
+    /* 按鈕內的文字 (放大字體！) */
+    div[data-testid="stSegmentedControl"] button p {
+        font-size: 18px !important; /* 加大 */
+        font-weight: 600 !important; /* 加粗 */
+        line-height: 1.5 !important;
+        padding: 5px 0 !important;
+    }
+    
+    /* 未選中狀態 */
     div[data-testid="stSegmentedControl"] button[aria-selected="false"] {
         background-color: transparent !important;
-        color: #666 !important;
+        color: #888 !important; /* 灰色字 */
     }
     
-    /* 選中狀態：白色卡片，加陰影 */
+    /* 選中狀態 */
     div[data-testid="stSegmentedControl"] button[aria-selected="true"] {
-        background-color: #ffffff !important;
-        color: #000 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-        font-weight: 600 !important;
+        background-color: #ffffff !important; /* 白底 */
+        color: #2c3e50 !important; /* 深藍字 */
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important; /* 陰影 */
     }
     
-    /* 3. 今日菜單按鈕優化 */
+    /* 3. 其他按鈕樣式 (維持原樣) */
+    .stButton > button {
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
+    
+    /* 4. 今日菜單移除按鈕 (緊湊) */
     div[data-testid="column"] button {
         padding: 0.2rem 0.5rem !important;
-        min-height: 0px !important;
-        line-height: 1 !important;
     }
 
     /* 隱藏 Plotly 模式列 */
     .js-plotly-plot .plotly .modebar {
         display: none !important;
-    }
-    
-    /* 一般按鈕樣式 (維持原樣，與導航區隔) */
-    .stButton > button {
-        border-radius: 8px;
-        border: 1px solid #eee;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -100,15 +99,13 @@ def inject_custom_css():
 # --- 2. 頁面功能函數 ---
 
 def show_ingredients_page():
-    # 簡易篩選器
+    # 篩選器 (使用 Pills)
     categories = ["全部"] + db.get_categories()
     selected_cat = st.pills("分類篩選", categories, default="全部", selection_mode="single", label_visibility="collapsed")
     
-    # 搜尋欄位
     search_keyword = st.text_input("搜尋", placeholder="輸入名稱或功效...", key="search_keyword", label_visibility="collapsed")
-    st.write("") # Spacer
+    st.write("") 
     
-    # 資料處理
     all_ingredients = db.get_all_ingredients()
     filtered_ingredients = []
     
@@ -239,18 +236,21 @@ def show_recipes_page():
 def show_menu_workspace_page():
     if 'menu_workspace' not in st.session_state: st.session_state.menu_workspace = []
     
-    # 使用全形空白 (\u3000) 撐開寬度
-    modes = ["　　自由配　　", "　　快速樣板　　", "　　經典套餐　　"]
-    mode_map = {
-        "　　自由配　　": "自由配",
-        "　　快速樣板　　": "快速樣板",
-        "　　經典套餐　　": "經典套餐"
+    # 使用「全形空白」撐開寬度 + 「Emoji」增加辨識度
+    modes = ["　🥦 食材　", "　📖 食譜　", "　🍽️ 菜單　"] # 這行好像是舊的，下面修正
+    
+    # 修正：這是次級導航 (自由配那些)
+    sub_modes = ["　自由配　", "　快速樣板　", "　經典套餐　"] # 一樣加全形空白
+    sub_mode_map = {
+        "　自由配　": "自由配",
+        "　快速樣板　": "快速樣板",
+        "　經典套餐　": "經典套餐"
     }
     
-    selected_mode_label = st.segmented_control(None, options=modes, default=modes[0], selection_mode="single", key="menu_mode_selector")
+    selected_sub_label = st.segmented_control(None, options=sub_modes, default=sub_modes[0], selection_mode="single", key="menu_mode_selector")
     
-    if not selected_mode_label: selected_mode_label = modes[0]
-    mode = mode_map[selected_mode_label]
+    if not selected_sub_label: selected_sub_label = sub_modes[0]
+    mode = sub_mode_map[selected_sub_label]
     
     if mode == "自由配":
         show_free_style_panel()
@@ -580,12 +580,13 @@ def main():
     
     st.markdown("<h1>植感飲食</h1>", unsafe_allow_html=True)
     
-    # 導航頁籤
-    pages = ["　　食材　　", "　　食譜　　", "　　菜單　　"]
+    # 導航頁籤 (加入 Emoji + 全形空白 + 程式碼對應)
+    # Emoji: 🥦 食材, 📖 食譜, 🍽️ 菜單
+    pages = ["　🥦 食材　", "　📖 食譜　", "　🍽️ 菜單　"]
     page_map = {
-        "　　食材　　": "食材",
-        "　　食譜　　": "食譜",
-        "　　菜單　　": "菜單"
+        "　🥦 食材　": "食材",
+        "　📖 食譜　": "食譜",
+        "　🍽️ 菜單　": "菜單"
     }
     
     selected_page_label = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
