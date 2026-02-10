@@ -14,50 +14,41 @@ st.set_page_config(
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* --- 隱藏 Streamlit 原生介面 (讓 App 更像原生應用) --- */
-    .stAppHeader {
-        display: none; /* 隱藏頂部 Fork/GitHub/Menu */
-    }
-    footer {
-        display: none; /* 隱藏底部 Made with Streamlit 與皇冠 */
-    }
+    /* 隱藏預設的 Header, Footer, Hamburger Menu */
+    header {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     
-    /* --- 1. 標題樣式 --- */
-    .stMarkdown h1 {
-        text-align: center;
-        color: #2c3e50;
-        padding-top: 10px;
-        padding-bottom: 10px;
+    /* 1. 極簡標題樣式 (強制置中修正) */
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         font-weight: 400;
+        color: #2c3e50;
+        text-align: center;
+        /* 強制佔滿寬度，並消除預設邊距影響 */
+        width: 100%;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-top: 10px;
     }
     
-    /* --- 2. 導航頁籤 (Segmented Control) 強制滿版 --- */
+    /* 2. 導航頁籤優化 */
     div[data-testid="stSegmentedControl"] {
-        width: 100% !important; /* 容器全寬 */
-    }
-    div[data-testid="stSegmentedControl"] > div {
-        width: 100% !important; /* 內層全寬 */
-        display: flex !important;
-    }
-    /* 關鍵：讓每個按鈕平分寬度 */
-    div[data-testid="stSegmentedControl"] button {
-        flex-grow: 1 !important;
-        flex-basis: 0 !important;
-        min-width: 0 !important; /* 允許文字壓縮 */
-        padding-left: 2px !important;
-        padding-right: 2px !important;
+        width: 100% !important;
+        display: flex;
+        justify-content: center;
     }
     
-    /* --- 3. 一般樣式優化 --- */
-    .stButton > button {
-        border-radius: 8px;
-        border: 1px solid #eee;
-        width: 100%; /* 按鈕盡量填滿 */
-    }
+    /* 3. 今日菜單按鈕優化 (表格模式不需要 CSS，自動適應) */
     
     /* 隱藏 Plotly 模式列 */
     .js-plotly-plot .plotly .modebar {
         display: none !important;
+    }
+    
+    /* 一般按鈕樣式 */
+    .stButton > button {
+        border-radius: 8px;
+        border: 1px solid #eee;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -204,8 +195,22 @@ def show_recipes_page():
 def show_menu_workspace_page():
     if 'menu_workspace' not in st.session_state: st.session_state.menu_workspace = []
     
-    modes = ["自由配", "快速樣板", "經典套餐"]
-    mode = st.segmented_control(None, options=modes, default=modes[0], selection_mode="single", key="menu_mode_selector")
+    # 【關鍵修改】使用全形空白 (\u3000) 來物理撐開按鈕寬度
+    # 每個選項前後加兩個全形空白
+    modes = ["　　自由配　　", "　　快速樣板　　", "　　經典套餐　　"]
+    # 建立一個對照表，方便程式邏輯判斷 (因為選到的值會包含空白)
+    mode_map = {
+        "　　自由配　　": "自由配",
+        "　　快速樣板　　": "快速樣板",
+        "　　經典套餐　　": "經典套餐"
+    }
+    
+    selected_mode_label = st.segmented_control(None, options=modes, default=modes[0], selection_mode="single", key="menu_mode_selector")
+    
+    # 如果沒選到(None)，預設為第一個
+    if not selected_mode_label: selected_mode_label = modes[0]
+    
+    mode = mode_map[selected_mode_label]
     
     if mode == "自由配":
         show_free_style_panel()
@@ -305,6 +310,8 @@ def show_quick_template_panel():
             key = f"{cat}_{i}"
             if key in st.session_state.temp_sels:
                 item = st.session_state.temp_sels[key]
+                # 使用 Data Editor 雖然穩，但在這裡只是暫存區，我們維持 columns
+                # 但為了手機穩，我們稍微簡化顯示
                 c1, c2 = st.columns([5, 1], vertical_alignment="center")
                 with c1: st.success(f"{cat}: {item['name']}")
                 with c2: 
@@ -388,43 +395,42 @@ def show_workspace_dashboard():
 def show_workspace_content():
     if not st.session_state.menu_workspace: return
     
-    # ★★★ 重大修改：改用 Data Editor (表格) 來處理刪除 ★★★
-    # 這是解決手機版排版問題的終極方案
+    # 【關鍵修改】使用 st.data_editor (表格模式) 來取代原本的按鈕列表
+    # 這能完美解決手機版按鈕跑版、換行、對不齊的所有問題
     
-    # 1. 準備顯示用的資料
-    data = []
+    # 1. 準備表格資料
+    df_data = []
     for item in st.session_state.menu_workspace:
-        data.append({
+        df_data.append({
             "菜名": item['name'],
-            "分類": item.get('category', '自訂'),
-            "刪除": False # 預設不勾選
+            "移除": False  # 預設不勾選
         })
     
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(df_data)
     
-    # 2. 顯示可編輯的表格
+    # 2. 顯示可編輯表格
     edited_df = st.data_editor(
         df,
+        use_container_width=True,
         column_config={
-            "菜名": st.column_config.TextColumn("菜名", disabled=True, width="medium"),
-            "分類": st.column_config.TextColumn("分類", disabled=True, width="small"),
-            "刪除": st.column_config.CheckboxColumn("移除?", default=False)
+            "菜名": st.column_config.TextColumn("菜色名稱", disabled=True), # 禁止改名
+            "移除": st.column_config.CheckboxColumn("刪除", help="勾選以移除", default=False)
         },
         hide_index=True,
-        use_container_width=True,
         key="workspace_editor"
     )
     
-    # 3. 檢查是否有被勾選刪除的項目
-    if edited_df['刪除'].any():
-        # 找出要保留的項目索引 (沒被勾選的)
-        keep_indices = edited_df[~edited_df['刪除']].index.tolist()
+    # 3. 檢查是否有被勾選移除的項目
+    # 如果使用者勾選了，我們就找出沒被勾選的，更新 session_state
+    if edited_df['移除'].any():
+        # 找出「沒有」被勾選移除的 index
+        keep_indices = edited_df.index[~edited_df['移除']].tolist()
         
-        # 更新 session_state (只保留沒被勾選的)
+        # 重建列表
         new_workspace = [st.session_state.menu_workspace[i] for i in keep_indices]
         st.session_state.menu_workspace = new_workspace
         st.rerun()
-
+    
     if st.button("清空工作台", key="clr_ws", use_container_width=True):
         st.session_state.menu_workspace = []
         st.rerun()
@@ -545,10 +551,19 @@ def main():
     
     st.markdown("<h1>植感飲食</h1>", unsafe_allow_html=True)
     
-    pages = ["食材", "食譜", "菜單"]
-    pg = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
+    # 【關鍵修改】使用全形空白 (\u3000) 來物理撐開按鈕寬度
+    # 每個選項前後加兩個全形空白
+    pages = ["　　食材　　", "　　食譜　　", "　　菜單　　"]
+    page_map = {
+        "　　食材　　": "食材",
+        "　　食譜　　": "食譜",
+        "　　菜單　　": "菜單"
+    }
     
-    if not pg: pg = "食材"
+    selected_page_label = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
+    
+    if not selected_page_label: selected_page_label = pages[0]
+    pg = page_map[selected_page_label]
 
     if pg == "食材": show_ingredients_page()
     elif pg == "食譜": show_recipes_page()
