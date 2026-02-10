@@ -19,72 +19,63 @@ def inject_custom_css():
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* 1. 標題樣式 (置中 + 隱藏錨點) */
+    /* 1. 標題樣式 */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         text-align: center;
         width: 100%;
         margin: 0 !important;
         padding-top: 10px;
         color: #2c3e50;
+        letter-spacing: 1px; /* 增加字距，提升質感 */
     }
     .stMarkdown h1 a { display: none !important; }
     
-    /* 2. 導航頁籤 (Segmented Control) 大改造 */
+    /* 2. 導航頁籤 (Segmented Control) 極簡風格 */
     
-    /* 外框容器：淺灰底 */
+    /* 外框容器 */
     div[data-testid="stSegmentedControl"] {
         width: 100% !important;
-        background-color: #f0f2f6 !important;
-        padding: 5px !important;
+        background-color: #f7f7f7 !important; /* 極淺灰底 */
+        padding: 4px !important;
         border-radius: 12px !important;
-        border: none !important;
-        margin-top: 10px;
         margin-bottom: 20px;
     }
     
-    /* 內層排版 */
     div[data-testid="stSegmentedControl"] > div {
         width: 100% !important;
     }
     
     /* 按鈕本體 */
     div[data-testid="stSegmentedControl"] button {
-        flex: 1 !important; /* 強制平分寬度 */
+        flex: 1 !important;
         min-width: 0 !important;
         border: none !important;
         margin: 0 2px !important;
-        border-radius: 8px !important;
-        transition: all 0.2s ease;
+        border-radius: 10px !important;
     }
     
-    /* 按鈕內的文字 (放大字體！) */
-    div[data-testid="stSegmentedControl"] button p {
-        font-size: 18px !important; /* 加大 */
-        font-weight: 600 !important; /* 加粗 */
-        line-height: 1.5 !important;
-        padding: 5px 0 !important;
+    /* ★★★ 關鍵：鎖定內部的文字元素放大字體 ★★★ */
+    div[data-testid="stSegmentedControl"] button div p {
+        font-size: 18px !important; /* 強制加大 */
+        font-weight: 500 !important;
+        padding: 4px 0 !important;
     }
     
     /* 未選中狀態 */
     div[data-testid="stSegmentedControl"] button[aria-selected="false"] {
+        color: #8e8e93 !important; /* iOS 風格的灰色 */
         background-color: transparent !important;
-        color: #888 !important; /* 灰色字 */
     }
     
     /* 選中狀態 */
     div[data-testid="stSegmentedControl"] button[aria-selected="true"] {
-        background-color: #ffffff !important; /* 白底 */
-        color: #2c3e50 !important; /* 深藍字 */
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important; /* 陰影 */
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important; /* 柔和陰影 */
+        font-weight: 600 !important;
     }
     
-    /* 3. 其他按鈕樣式 (維持原樣) */
-    .stButton > button {
-        border-radius: 8px;
-        border: 1px solid #e0e0e0;
-    }
-    
-    /* 4. 今日菜單移除按鈕 (緊湊) */
+    /* 3. 今日菜單移除按鈕 (緊湊) */
     div[data-testid="column"] button {
         padding: 0.2rem 0.5rem !important;
     }
@@ -92,6 +83,12 @@ def inject_custom_css():
     /* 隱藏 Plotly 模式列 */
     .js-plotly-plot .plotly .modebar {
         display: none !important;
+    }
+    
+    /* 一般按鈕樣式 */
+    .stButton > button {
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -236,11 +233,10 @@ def show_recipes_page():
 def show_menu_workspace_page():
     if 'menu_workspace' not in st.session_state: st.session_state.menu_workspace = []
     
-    # 使用「全形空白」撐開寬度 + 「Emoji」增加辨識度
-    modes = ["　🥦 食材　", "　📖 食譜　", "　🍽️ 菜單　"] # 這行好像是舊的，下面修正
+    # 移除 Emoji，使用純文字 + 全形空白
+    modes = ["　　食材　　", "　　食譜　　", "　　菜單　　"] # 這行好像是舊的，下面修正
     
-    # 修正：這是次級導航 (自由配那些)
-    sub_modes = ["　自由配　", "　快速樣板　", "　經典套餐　"] # 一樣加全形空白
+    sub_modes = ["　自由配　", "　快速樣板　", "　經典套餐　"]
     sub_mode_map = {
         "　自由配　": "自由配",
         "　快速樣板　": "快速樣板",
@@ -433,7 +429,6 @@ def show_workspace_dashboard():
 def show_workspace_content():
     if not st.session_state.menu_workspace: return
     
-    # 使用表格模式 (Data Editor) 顯示菜單
     df_data = []
     for item in st.session_state.menu_workspace:
         df_data.append({
@@ -580,13 +575,12 @@ def main():
     
     st.markdown("<h1>植感飲食</h1>", unsafe_allow_html=True)
     
-    # 導航頁籤 (加入 Emoji + 全形空白 + 程式碼對應)
-    # Emoji: 🥦 食材, 📖 食譜, 🍽️ 菜單
-    pages = ["　🥦 食材　", "　📖 食譜　", "　🍽️ 菜單　"]
+    # 移除 Emoji，使用純文字 + 全形空白
+    pages = ["　　食材　　", "　　食譜　　", "　　菜單　　"]
     page_map = {
-        "　🥦 食材　": "食材",
-        "　📖 食譜　": "食譜",
-        "　🍽️ 菜單　": "菜單"
+        "　　食材　　": "食材",
+        "　　食譜　　": "食譜",
+        "　　菜單　　": "菜單"
     }
     
     selected_page_label = st.segmented_control(None, options=pages, default=pages[0], selection_mode="single", key="main_nav")
